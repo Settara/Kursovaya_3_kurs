@@ -10,41 +10,50 @@ import (
 	"sync"
 )
 
-var clients = make(map[string]clientInfo) // Tracks connected clients (username, connection)
-var mu sync.Mutex                         // Ensures concurrent access safety for clients map
+// Отслеживаем подключенных клиентов c помощью go карты(ключ-значение:IP-ПОРТ)
+var clients = make(map[string]clientInfo)
 
+// Обеспечиваем безопасный доступ к карте клиентов при одновременном доступе или изменении ее несколькими программами.
+var mu sync.Mutex
+
+// Структура в которой хранится информация о клиенте
 type clientInfo struct {
+	//Имя клиента
 	username string
-	conn     net.Conn
+	//Сетевое подключение
+	conn net.Conn
 }
 
+// Эта функция запускается отдельно для каждого подключенного клиента
 func handleClient(conn net.Conn) {
+	//Соеденение будет закрыто при завершении работы функции
 	defer conn.Close()
+	//Получает IP и порт в виде строки
 	clientAddr := conn.RemoteAddr().String()
 
-	// Request and validate the password
-	conn.Write([]byte("Enter server password: "))
+	//Запрос пароля
+	conn.Write([]byte("Введите пароль от сервера: "))
 	scanner := bufio.NewScanner(conn)
 	if scanner.Scan() {
 		password := scanner.Text()
 		if password != ServerPassword {
-			conn.Write([]byte("Incorrect password. Connection closed.\n"))
-			log.Printf("Client %s failed to provide correct password.\n", clientAddr)
+			conn.Write([]byte("Пароль неверный, соединение разорвано.\n"))
+			log.Printf("Пользователь %s не смог ввести правильный пароль.\n", clientAddr)
 			return
 		}
 	}
 
-	// Request username
-	conn.Write([]byte("Enter your username: "))
+	//Получение имени
+	conn.Write([]byte("Введите ваше имя: "))
 	var username string
 	if scanner.Scan() {
 		username = scanner.Text()
 	}
 
-	log.Printf("Client connected: %s (Username: %s)\n", clientAddr, username)
-	fmt.Printf("New client connected: %s (Username: %s)\n", clientAddr, username)
+	log.Printf("Пользователь подключен: %s (Имя пользователя: %s)\n", clientAddr, username)
+	fmt.Printf("Новый пользователь подключен: %s (Имя пользователя: %s)\n", clientAddr, username)
 
-	// Store the client's information
+	//Сохранение информации о клиентах
 	mu.Lock()
 	clients[clientAddr] = clientInfo{username: username, conn: conn}
 	mu.Unlock()
@@ -57,79 +66,86 @@ func handleClient(conn net.Conn) {
 		case message == "/list":
 			handleListClients(conn)
 		default:
-			log.Printf("Unknown command from %s: %s", clientAddr, message)
-			conn.Write([]byte("Unknown command. Use /help for a list of available commands.\n"))
+			log.Printf("Неизвестная команда от %s: %s", clientAddr, message)
+			conn.Write([]byte("Неизвестная команда. Используйте /help чтобы посмотреть список доступных команд.\n"))
 		}
 	}
 
-	// Client disconnect handling
+	//Обработка отключения клиента
 	mu.Lock()
 	delete(clients, clientAddr)
 	mu.Unlock()
-	log.Printf("Client disconnected: %s (Username: %s)\n", clientAddr, username)
-	fmt.Printf("Client disconnected: %s (Username: %s)\n", clientAddr, username)
+	log.Printf("Пользователь отключился: %s (Имя пользователя: %s)\n", clientAddr, username)
+	fmt.Printf("Пользователь отключился: %s (Имя пользователя: %s)\n", clientAddr, username)
 }
 
+// Функция личного сообщения по команде /msg
 func handlePrivateMessage(senderAddr, message string) {
+	//Разбивает сообщение на каоманду, адрес получателя, и текст сообщения
 	parts := strings.SplitN(message, " ", 3)
 	if len(parts) < 3 {
-		log.Printf("Invalid message format from %s: %s", senderAddr, message)
+		log.Printf("Неверный формат сообщения от %s: %s", senderAddr, message)
 		return
 	}
 	recipientAddr := parts[1]
 	msgText := parts[2]
-
+	//Блокирует карту клиентов, чтобы безопасно удалить из нее клиента после его отключения
 	mu.Lock()
 	recipientInfo, exists := clients[recipientAddr]
 	mu.Unlock()
 
 	if exists {
-		_, err := recipientInfo.conn.Write([]byte(fmt.Sprintf("Message from %s: %s\n", clients[senderAddr].username, msgText)))
+		_, err := recipientInfo.conn.Write([]byte(fmt.Sprintf("Сообщение от %s: %s\n", clients[senderAddr].username, msgText)))
 		if err != nil {
-			log.Printf("Error sending message to %s: %v", recipientAddr, err)
+			log.Printf("Ошибка отправки сообщения к %s: %v", recipientAddr, err)
 		} else {
-			log.Printf("Message sent from %s to %s: %s", clients[senderAddr].username, recipientInfo.username, msgText)
+			log.Printf("Сообщение отправлено от %s к %s: %s", clients[senderAddr].username, recipientInfo.username, msgText)
 		}
 	} else {
-		log.Printf("Recipient %s not found", recipientAddr)
+		log.Printf("Получатель %s не найден", recipientAddr)
 		senderConn := clients[senderAddr].conn
-		senderConn.Write([]byte(fmt.Sprintf("Recipient %s not found. Please check the address.\n", recipientAddr)))
+		senderConn.Write([]byte(fmt.Sprintf("Получатель %s не найден. Проверьте адрес.\n", recipientAddr)))
 	}
 }
 
-// Enhanced "/list" command to show usernames and IP addresses
+// Вывод списка пользователей, подключенных к серверу
 func handleListClients(conn net.Conn) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	clientList := "Connected clients:\n"
+	clientList := "Подключенный пользователи:\n"
 	for addr, info := range clients {
-		clientList += fmt.Sprintf("Username: %s, Address: %s\n", info.username, addr)
+		clientList += fmt.Sprintf("Имя пользователя: %s, Адрес: %s\n", info.username, addr)
 	}
 	conn.Write([]byte(clientList))
 }
 
+// Запускает сервер на указанном порту
 func startServer(port string) {
+	//Запускает tcp-сервер, прослушивающий указанный порт
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
-		log.Fatalf("Error starting server: %v", err)
+		log.Fatalf("Ошибка при запуске сервера: %v", err)
 	}
 	defer listener.Close()
 
-	log.Printf("Server started on port %s\n", port)
-	fmt.Printf("Server started on port %s. Waiting for clients...\n", port)
+	log.Printf("Сервер запущен по порту %s\n", port)
+	fmt.Printf("Сервер запущен по порту %s. Ожидаем подключения пользователей...\n", port)
 
 	for {
+		//Ожидает входящих клиентских подключений
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Printf("Error accepting connection: %v", err)
+			log.Printf("Ошибка при приеме соединения: %v", err)
 			continue
 		}
-		go handleClient(conn) // Handle each connection in a separate goroutine
+		//Вызываем функцию при каждом новом подключении
+		go handleClient(conn)
 	}
 }
 
 func main() {
+	//Сервер записывает события в файл с именем server.log.
 	logFile, err := os.OpenFile("server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatal(err)
@@ -137,7 +153,8 @@ func main() {
 	defer logFile.Close()
 
 	log.SetOutput(logFile)
-	port := "8080" // Default port
+	//Стандартный порт
+	port := "8080"
 	if len(os.Args) > 1 {
 		port = os.Args[1]
 	}

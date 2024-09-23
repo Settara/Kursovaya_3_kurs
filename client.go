@@ -9,113 +9,123 @@ import (
 	"strings"
 )
 
+// Функция выводит сообщение о том, какие команды можно ввести.
 func printHelp() {
 	helpMessage := `
-Available commands:
-- /msg : Send a private message to another client (you'll specify the recipient next).
-- /list : View the list of all connected clients (usernames and IPs).
-- /help : Show available commands.
-- /exit : Exit the messenger.
+Команды:
+- /msg : Отправить сообщение другому пользователю.
+- /list : Посмотреть список пользователей, подключенных к серверу.
+- /help : Посмотреть список доступных команд.
+- /exit : Выйти из мессенджера.
 `
 	fmt.Println(helpMessage)
 }
 
+// Основная функция которая управляет клиентом
 func startClient(serverAddr string) {
+
+	//Попытка установить tcp-соединение с сервером по переданному адресу
 	conn, err := net.Dial("tcp", serverAddr)
 	if err != nil {
-		log.Fatalf("Failed to connect to server: %v", err)
+		log.Fatalf("Не получилось подключиться к серверу: %v", err)
 	}
+
+	//Соеденение будет закрыто при завершении работы функции
 	defer conn.Close()
 
-	// Handle incoming messages from the server in a separate goroutine
+	//Горутина для получения сообщений от сервера
 	go func() {
 		scanner := bufio.NewScanner(conn)
 		for scanner.Scan() {
-			fmt.Printf("\n%s\n", scanner.Text()) // Ensure new messages start from a new line
+			//Выводит каждое сообщение, получаемое от сервера.
+			fmt.Printf("\n%s\n", scanner.Text())
 		}
 	}()
 
+	//Для считывания пользовательского ввода с консоли
 	scanner := bufio.NewScanner(os.Stdin)
 
-	// Request password
-	fmt.Print("Enter server password: ")
+	//Спрашиваем знает ли пользователь пароль от сервера
+	fmt.Print("Введите пароль от сервера: ")
 	if scanner.Scan() {
 		password := scanner.Text()
+		//Отправляем введенный пароль на сервер
 		_, err := conn.Write([]byte(password + "\n"))
 		if err != nil {
-			log.Fatalf("Failed to send password: %v", err)
+			log.Fatalf("Пароль не правильный: %v", err)
 		}
 	}
 
-	// Request username
-	fmt.Print("Enter your username: ")
+	//Спрашиваем у пользователя его имя
+	fmt.Print("Введите ваше имя: ")
 	var username string
 	if scanner.Scan() {
 		username = scanner.Text()
+		//Отправляем имя на сервер
 		_, err := conn.Write([]byte(username + "\n"))
 		if err != nil {
-			log.Fatalf("Failed to send username: %v", err)
+			log.Fatalf("Что-то с именем пошло не так: %v", err)
 		}
 	}
 
-	fmt.Println("Connected to the server as", username)
-	fmt.Println("Type '/help' for a list of commands.")
+	fmt.Println("Вы подключены к серверу под именем: ", username)
+	fmt.Println("Введите '/help' для получения списка доступных команд.")
 
-	// Main input loop for the user
+	//Бесконечный цикл который крутится, пока пользователь не завершит работу
 	for {
-		fmt.Print("Enter command or message (or /help for commands, /exit to quit): ")
+		fmt.Print("Введите сообщение или команду (/help для списка команд, /exit чтобы выйти): ")
 		if scanner.Scan() {
 			command := scanner.Text()
 
 			switch {
 			case command == "/exit":
-				fmt.Println("Exiting client.")
+				fmt.Println("Вы отключились от сервера.")
 				return
 			case command == "/help":
 				printHelp()
 			case command == "/list":
+				//Отправляет команду /list на сервер
 				_, err := conn.Write([]byte("/list\n"))
 				if err != nil {
-					log.Printf("Error sending /list command: %v", err)
+					log.Printf("Ошибка в отправке команды /list : %v", err)
 				}
 			case strings.HasPrefix(command, "/msg"):
-				// Ask for the recipient after the message is typed
-				fmt.Print("Enter recipient's IP:Port: ")
+				//Спрашиваем куда отправить сообщине
+				fmt.Print("Введите IP:Port получателя: ")
 				if scanner.Scan() {
 					recipient := scanner.Text()
-
-					// Ensure the message isn't empty
+					//Проверяем что сообщение не пустое
 					message := strings.TrimSpace(command[4:])
 					if message == "" {
-						fmt.Println("Message cannot be empty.")
+						fmt.Println("Сообщение не может быть пустым.")
 					} else {
-						// Format and send the message to the server
 						fullMessage := fmt.Sprintf("/msg %s %s\n", recipient, message)
+						//Отправляем сообщение на сервер
 						_, err := conn.Write([]byte(fullMessage))
 						if err != nil {
-							log.Printf("Error sending message: %v", err)
+							log.Printf("Ошибка отправки сообщения: %v", err)
 						} else {
-							fmt.Println("Message sent.")
+							fmt.Println("Сообщение отправлено.")
 						}
 					}
 				}
 			default:
-				// For normal messages, prompt for the recipient after the message
-				fmt.Print("Enter recipient's IP:Port: ")
+				//Для обычных сообщений(не команд)
+				fmt.Print("Введите IP:Port получателя: ")
 				if scanner.Scan() {
 					recipient := scanner.Text()
 
-					// Ensure the message isn't empty
+					//Проверяем что сообщение не пустое
 					if strings.TrimSpace(command) == "" {
-						fmt.Println("Message cannot be empty.")
+						fmt.Println("Сообщение не может быть пустым.")
 					} else {
-						// Format and send the message to the server
 						fullMessage := fmt.Sprintf("/msg %s %s\n", recipient, command)
+						//Отправляем сообщение на сервер
 						_, err := conn.Write([]byte(fullMessage))
 						if err != nil {
-							log.Printf("Error sending message: %v", err)
+							log.Printf("Ошибка отправки сообщения: %v", err)
 						} else {
-							fmt.Println("Message sent.")
+							fmt.Println("Сообщение отправлено.")
 						}
 					}
 				}
@@ -125,11 +135,12 @@ func startClient(serverAddr string) {
 }
 
 func main() {
+	//Проверяем указал ли пользователь адрес сервера для запуска программы
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run client.go <server_address>")
+		fmt.Println("Введите: go run client.go <адрес сервера:порт>")
 		return
 	}
-
+	//Записывает в serverAddr адрес сервера и вызывает основную функцию
 	serverAddr := os.Args[1]
 	startClient(serverAddr)
 }
