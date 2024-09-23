@@ -1,0 +1,9 @@
+2024/09/22 14:07:25 Server started on port 8080
+2024/09/22 14:07:49 Client connected: 127.0.0.1:56238 (Username: Ivan)
+2024/09/22 14:08:36 Client connected: 127.0.0.1:56255 (Username: Egor)
+2024/09/22 14:09:33 Message sent from Egor to Ivan: Привет братка
+2024/09/22 14:15:27 Server started on port 8080
+2024/09/22 14:15:49 Client connected: 127.0.0.1:56461 (Username: Иван Чепрасов)
+2024/09/22 14:16:03 Client connected: 127.0.0.1:56472 (Username: Егор Чепрасов)
+2024/09/22 14:16:34 Message sent from Егор Чепрасов to Иван Чепрасов: Привет, брат!
+2024/09/23 13:50:50 Server started on port 8080
