@@ -1,7 +1,6 @@
-// config.go
 package main
 
 const (
-	ServerPassword = "supersecretpassword" // Define your server password here
+	ServerPassword = "ivancheprasov"
 	ServerPort     = "8080"
 )
